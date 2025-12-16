@@ -110,7 +110,7 @@ CRC-16 combined with Manchester encoding and socket communication provides relia
 
 The system can detect single-bit, multi-bit, odd-bit, and burst errors, demonstrating the effectiveness of CRC-16 in digital data transmission.
 
-## 🖥 Compilation & Execution Instructions (Linux/MacOS)
+## Compilation & Execution Instructions (Linux/MacOS)
 
 1. **Navigate** to the project directory:
 ```bash
