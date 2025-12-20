@@ -3,6 +3,8 @@
 #include <string>
 #include <cstdint>
 #include <cstring>
+#include <unordered_set>
+#include <random>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -52,12 +54,46 @@ void flip_burst(vector<int> &bits, size_t pos, size_t len) {
     }
 }
 
+// Random distinct bit flips (for odd errors)
+static size_t rand_pos(size_t n) {
+    static random_device rd;
+    static mt19937 gen(rd());
+    uniform_int_distribution<size_t> dist(0, n - 1);
+    return dist(gen);
+}
+
+static void flip_k_distinct_bits(vector<int> &bits, int k) {
+    unordered_set<size_t> used;
+    used.reserve((size_t)k * 2);
+
+    while ((int)used.size() < k) {
+        size_t p = rand_pos(bits.size());
+        if (used.insert(p).second) {
+            bits[p] ^= 1;
+        }
+    }
+}
+
 int main() {
-    // 1. Data bits
-    string data_str = "1011001100110101";  // 16 data bits
+    // 1. Data bits (USER INPUT)
+    string data_str;
+    cout << "Enter data bits (0/1 only): ";
+    cin >> data_str;
+
     vector<int> data_bits;
+    data_bits.reserve(data_str.size());
+
     for (char c : data_str) {
         if (c == '0' || c == '1') data_bits.push_back(c - '0');
+        else {
+            cout << "Invalid input! Only 0 and 1 allowed.\n";
+            return 1;
+        }
+    }
+
+    if (data_bits.empty()) {
+        cout << "Empty data is not allowed.\n";
+        return 1;
     }
 
     cout << "Sender: Data bits = " << data_str << "\n";
@@ -70,15 +106,14 @@ int main() {
     for (int i = 15; i >= 0; --i) {
         frame_bits.push_back((crc >> i) & 1);
     }
-    cout << "Sender: Frame bits (data + CRC) = "
-         << frame_bits.size() << "\n";
+    cout << "Sender: Frame bits (data + CRC) = " << frame_bits.size() << "\n";
 
     // 3. Choose error on FRAME bits
     cout << "\nError test cases:\n"
          << "0 = No error\n"
          << "1 = Single bit error\n"
          << "2 = Two isolated single-bit errors\n"
-         << "3 = Odd number of errors (3 bits)\n"
+         << "3 = Odd number of errors (user input)\n"
          << "4 = Burst error length 8\n"
          << "5 = Burst error length 17\n"
          << "6 = Burst error length 22\n"
@@ -91,33 +126,58 @@ int main() {
         case 0:
             cout << "Sender: No error.\n";
             break;
+
         case 1:
-            cout << "Sender: Single bit error at frame bit 10.\n";
-            flip_bit(frame_bits, 10);
+            if (frame_bits.size() > 10) {
+                cout << "Sender: Single bit error at frame bit 10.\n";
+                flip_bit(frame_bits, 10);
+            } else {
+                cout << "Sender: Frame too short, flipping bit 0.\n";
+                flip_bit(frame_bits, 0);
+            }
             break;
+
         case 2:
-            cout << "Sender: Two isolated errors at frame bits 5 and 20.\n";
-            flip_bit(frame_bits, 5);
-            flip_bit(frame_bits, 20);
+            cout << "Sender: Two isolated errors at frame bits 5 and 20 (if possible).\n";
+            if (frame_bits.size() > 5) flip_bit(frame_bits, 5);
+            if (frame_bits.size() > 20) flip_bit(frame_bits, 20);
+            else if (frame_bits.size() > 1) flip_bit(frame_bits, 1);
             break;
-        case 3:
-            cout << "Sender: Odd number of errors at frame bits 2, 10, 25.\n";
-            flip_bit(frame_bits, 2);
-            flip_bit(frame_bits, 10);
-            flip_bit(frame_bits, 25);
+
+        case 3: {
+            int k;
+            cout << "Enter odd number of errors (3/5/7/...): ";
+            cin >> k;
+
+            if (k < 1 || (k % 2) == 0) {
+                cout << "Invalid! Must be a positive odd number.\n";
+                return 1;
+            }
+            if ((size_t)k > frame_bits.size()) {
+                cout << "Too many errors for frame size (" << frame_bits.size() << ").\n";
+                return 1;
+            }
+
+            cout << "Sender: Flipping " << k << " distinct random frame bits.\n";
+            flip_k_distinct_bits(frame_bits, k);
             break;
+        }
+
         case 4:
             cout << "Sender: Burst error of length 8 starting at frame bit 8.\n";
             flip_burst(frame_bits, 8, 8);
             break;
+
         case 5:
             cout << "Sender: Burst error of length 17 starting at frame bit 8.\n";
             flip_burst(frame_bits, 8, 17);
             break;
+
         case 6:
             cout << "Sender: Burst error of length 22 starting at frame bit 5.\n";
             flip_burst(frame_bits, 5, 22);
             break;
+
         default:
             cout << "Sender: Invalid choice, sending with no error.\n";
             break;
@@ -125,8 +185,7 @@ int main() {
 
     // 4. Manchester encode the (possibly corrupted) frame bits
     vector<int> encoded_bits = manchester_encode(frame_bits);
-    cout << "Sender: Manchester encoded bits = "
-         << encoded_bits.size() << "\n";
+    cout << "Sender: Manchester encoded bits = " << encoded_bits.size() << "\n";
 
     // 5. Convert to '0'/'1' characters
     string payload;
@@ -158,10 +217,7 @@ int main() {
 
     size_t total = 0;
     while (total < payload.size()) {
-        ssize_t n = ::send(sock,
-                           payload.data() + total,
-                           payload.size() - total,
-                           0);
+        ssize_t n = ::send(sock, payload.data() + total, payload.size() - total, 0);
         if (n <= 0) { perror("send"); break; }
         total += (size_t)n;
     }
