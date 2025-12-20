@@ -97,18 +97,33 @@ int main() {
     char buf[4096];
     while (true) {
         ssize_t n = ::read(client_sock, buf, sizeof(buf));
-        if (n < 0) { perror("read"); break; }
+        if (n < 0) { perror("read"); ::close(client_sock); ::close(sock); return 1; }
         if (n == 0) break; // EOF (sender closed)
         payload.append(buf, buf + n);
     }
 
     cout << "Receiver: Received " << payload.size() << " bytes.\n";
 
-    // Convert '0'/'1' chars to bits
+    if (payload.empty()) {
+        cerr << "Receiver: Empty payload.\n";
+        ::close(client_sock);
+        ::close(sock);
+        return 1;
+    }
+
+    // Convert '0'/'1' chars to bits (STRICT validation)
     vector<int> enc_bits;
     enc_bits.reserve(payload.size());
+
     for (char c : payload) {
         if (c == '0' || c == '1') enc_bits.push_back(c - '0');
+        else {
+            cerr << "Receiver: Invalid char in payload (not 0/1): '" << c << "'\n";
+            cout << "Receiver: ERROR DETECTED!\n";
+            ::close(client_sock);
+            ::close(sock);
+            return 0;
+        }
     }
 
     cout << "Receiver: Encoded bits = " << enc_bits.size() << "\n";
@@ -124,16 +139,18 @@ int main() {
 
     cout << "Receiver: Decoded bits (data + CRC) = " << all_bits.size() << "\n";
 
-    if (all_bits.size() < 16) {
-        cerr << "Receiver: Not enough bits for CRC.\n";
+    // Need at least 16 CRC bits + at least 1 data bit
+    if (all_bits.size() < 17) {
+        cerr << "Receiver: Not enough bits (need >= 17: at least 1 data + 16 CRC).\n";
+        cout << "Receiver: ERROR DETECTED!\n";
         ::close(client_sock);
         ::close(sock);
-        return 1;
+        return 0;
     }
 
     // Split data and CRC
     size_t data_len = all_bits.size() - 16;
-    vector<int> data_bits(all_bits.begin(), all_bits.begin() + data_len);
+    vector<int> data_bits(all_bits.begin(), all_bits.begin() + (long)data_len);
 
     uint16_t recv_crc = 0;
     for (size_t i = data_len; i < all_bits.size(); ++i) {
@@ -142,6 +159,7 @@ int main() {
 
     uint16_t calc_crc = crc16(data_bits);
 
+    cout << "Receiver: Data bits length = " << data_len << "\n";
     cout << "Receiver: Received CRC = 0x" << hex << recv_crc
          << ", Calculated CRC = 0x" << calc_crc << dec << "\n";
 
