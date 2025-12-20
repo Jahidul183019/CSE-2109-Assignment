@@ -1,137 +1,117 @@
-# Implementation of CRC-16 Error Detection Using Socket Programming with Manchester Encoding
-##  Project Question
-Implement CRC-16 based error detection in a sender–receiver communication system using TCP sockets in C/C++. The system should use Manchester encoding and be able to detect the following errors introduced at the bit level:
+# CRC-16 Error Detection with TCP Sockets and Manchester Encoding
 
-Single-bit error detection
+## 1. Project Question
+Implement CRC-16 based error detection in a sender–receiver communication system using TCP sockets in C/C++.  
+The system uses Manchester encoding and detects the following bit-level errors:
 
-Two isolated single-bit errors
+- Single-bit error
+- Two isolated single-bit errors
+- Odd number of errors
+- Burst errors of length 8, 17, 22
 
-Odd number of errors
+> **Note:** Only C/C++ implementations are allowed.
 
-Burst errors of different sizes (8, 17, 22 bits)
+---
 
-Note: Only C/C++ implementations are allowed. Use of Linux environment is recommended for socket programming.
+## 2. Objectives
+- Implement **CRC-16 (Polynomial: 0x1021, Init: 0x0000)**
+- Build a **TCP-based sender and receiver**
+- Encode the transmitted frame using **Manchester encoding**
+- Introduce configurable **bit-level errors** from the sender side
+- Detect errors at the receiver using CRC verification
 
-## Objective
+---
 
-The objective of this project is to:
+## 3. System Overview
 
-Implement CRC-16 (Polynomial 0x1021) based error detection.
+### 3.1 Sender
+1. Takes **data bits** as input (0/1 string)
+2. Computes **CRC-16** over the data bits
+3. Builds a **frame**: `frame = data_bits + crc_bits(16)`
+4. Injects selected **bit errors**
+5. Applies **Manchester encoding**
+6. Sends encoded bitstream to the receiver via **TCP socket**
 
-Simulate sender-receiver communication using TCP sockets in C++.
+### 3.2 Receiver
+1. Receives encoded bitstream via **TCP**
+2. Converts received payload into a bit vector
+3. Performs **Manchester decoding**
+4. Splits decoded frame into: `data_bits` and `received_crc`
+5. Recomputes CRC-16 on received data
+6. Compares CRC values and outputs:
+   - ✅ No error detected
+   - ❌ Error detected
 
-Apply Manchester encoding for bit-level transmission.
+---
 
-Detect different types of bit-level transmission errors.
-
-## Tools & Environment
-
-Language: C/C++
-
-Platform: Linux/MacOS
-
-Communication Protocol: TCP Socket Programming
-
-Error Detection: CRC-16 (Polynomial 0x1021)
-
-Encoding Scheme: Manchester Encoding
-
-## System Overview
-
-The system has two programs:
-
-### 1. Sender
-
-Converts data into binary bits
-
-Computes CRC-16 on data bits
-
-Appends CRC bits to form a frame
-
-Introduces bit-level errors (configurable)
-
-Applies Manchester encoding
-
-Sends encoded bits to the receiver via TCP socket
-
-### 2. Receiver
-
-Receives encoded bitstream
-
-Performs Manchester decoding
-
-Separates data bits and CRC bits
-
-Recomputes CRC-16 on received data
-
-Compares CRC values to detect errors
-
-## Manchester Encoding
+## 4. Manchester Encoding
+Manchester encoding rule used:
 
 | Data Bit | Manchester Code |
-|----------|----------------|
-| 0        | 10             |
-| 1        | 01             |
+|---------:|------------------|
+| 0        | 10               |
+| 1        | 01               |
 
+---
 
-Polynomial: 0x1021
+## 5. CRC-16 Details
+- **Polynomial:** `0x1021`
+- **Initial CRC:** `0x0000`
+- CRC computed **bit-by-bit**
+- CRC (16 bits) appended to the frame before transmission
 
-Initial CRC Value: 0x0000
+---
 
-Calculated bit-by-bit on data bits
+## 6. Error Injection Test Cases
+Errors are applied at the sender side (bit-level):
 
-CRC bits are appended to the frame before transmission
+| Choice | Test Case                | Description |
+|------:|--------------------------|------------|
+| 0     | No Error                 | Clean transmission |
+| 1     | Single-bit error         | 1 bit flipped |
+| 2     | Two isolated errors      | 2 bits flipped at different positions |
+| 3     | Odd number of errors     | User input: 3/5/7/... bits flipped |
+| 4     | Burst error (8)          | 8 consecutive bits flipped |
+| 5     | Burst error (17)         | 17 consecutive bits flipped |
+| 6     | Burst error (22)         | 22 consecutive bits flipped |
 
-## Error Injection Test Cases
+> **Note:** Errors are injected **before Manchester encoding** so the encoded signal remains valid.
 
-| Test Case              | Description                 |
-|------------------------|----------------------------|
-| No Error               | Clean transmission         |
-| Single Bit Error       | One bit flipped            |
-| Two Isolated Errors    | Two separate bit flips     |
-| Odd Number of Errors   | Three flipped bits         |
-| Burst Error (8 bits)   | 8 consecutive bit flips    |
-| Burst Error (17 bits)  | 17 consecutive bit flips   |
-| Burst Error (22 bits)  | 22 consecutive bit flips   |
+---
 
-> Errors are injected **before Manchester encoding**, ensuring valid encoded symbols.
+## 7. Expected Output
+Receiver prints CRC comparison result:
 
-## Result
+- If `received_crc == computed_crc` → ✅ No error detected  
+- Else → ❌ Error detected
 
-The receiver successfully detects all injected errors using CRC-16.
+Manchester decoding failure (invalid pair) is also treated as an error.
 
-No errors → CRC verification passes
+---
 
-Errors → CRC mismatch indicates transmission error
+## 8. Compilation & Execution
 
-## Conclusion
-
-CRC-16 combined with Manchester encoding and socket communication provides reliable error detection.
-
-The system can detect single-bit, multi-bit, odd-bit, and burst errors, demonstrating the effectiveness of CRC-16 in digital data transmission.
-
-## Compilation & Execution Instructions (Linux/MacOS)
-
-1. **Navigate** to the project directory:
-```bash
-cd /path/to/project
-```
-
-2.Compile sender and receiver using g++:
+### 8.1 Compile
 ```bash
 g++ sender.cpp -o sender
 g++ receiver.cpp -o receiver
 ```
 
-3.Run the receiver first (so it listens on a port):
+### 8.2 Run (Port: 9000)
+1.Run the receiver first:
 ```bash
 ./receiver
 ```
 
-4.Run the sender to send data:
+2.Run the sender:
 ```bash
 ./sender
 ```
 
-> The sender will compute CRC-16, encode data with Manchester encoding, optionally inject errors, and send it to the receiver.
-The receiver decodes, recomputes CRC, and reports error detection results.
+## 9. Files
+
+sender.cpp → Sender implementation
+
+receiver.cpp → Receiver implementation
+
+README.md → Project documentation
